@@ -1,5 +1,5 @@
 """
-HTML Generator - Creates PLAYABLE interactive 3D adventure game!
+HTML Generator - Creates PLAYABLE interactive adventure game!
 """
 import json
 
@@ -9,21 +9,22 @@ def generate_html_game(world_data: dict) -> str:
     
     title = world_data.get('title', 'Circus Arena Adventure')
     setting = world_data.get('setting', '')
-    rounds = world_data.get('rounds', [])
     world = world_data.get('world', {})
     rooms = world.get('rooms', [])
     items = world.get('items', [])
     npcs = world.get('npcs', [])
-    performers = world_data.get('performers', [])
     
     start_room = world_data.get('start_room', rooms[0]['id'] if rooms else 'room_1')
     
-    # Build rooms data for JS
     rooms_json = json.dumps(rooms)
     items_json = json.dumps(items)
     npcs_json = json.dumps(npcs)
     
-    # Build the HTML
+    win_condition = world_data.get('win_condition', 'Explore and complete the adventure')
+    rounds_html = ""
+    for r in world_data.get('rounds', []):
+        rounds_html += f'<p style="color:#ffd700;">Round {r["id"]}: {r["name"]} - {r.get("objective", "")}</p>'
+    
     html = f'''<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -58,7 +59,6 @@ def generate_html_game(world_data: dict) -> str:
         h1 {{ font-size: 2.5em; margin-bottom: 10px; }}
         .subtitle {{ color: #aaa; font-size: 1.1em; font-style: italic; }}
         
-        /* 3D VIEWPORT */
         .viewport {{
             background: #0d0d1a;
             border-radius: 20px;
@@ -68,10 +68,7 @@ def generate_html_game(world_data: dict) -> str:
             border: 2px solid rgba(255,255,255,0.1);
         }}
         
-        .room-header {{
-            text-align: center;
-            margin-bottom: 20px;
-        }}
+        .room-header {{ text-align: center; margin-bottom: 20px; }}
         
         .room-name {{
             font-size: 2em;
@@ -88,7 +85,6 @@ def generate_html_game(world_data: dict) -> str:
             border-radius: 10px;
         }}
         
-        /* 3D ROOM VISUALIZATION */
         .room-3d {{
             perspective: 1000px;
             height: 250px;
@@ -114,49 +110,13 @@ def generate_html_game(world_data: dict) -> str:
             font-size: 2em;
         }}
         
-        .floor {{
-            width: 200px;
-            height: 200px;
-            transform: rotateX(90deg) translateZ(-30px);
-            background: repeating-linear-gradient(45deg, #1a1a2e, #1a1a2e 20px, #252540 20px, #252540 40px);
-        }}
+        .floor {{ width: 200px; height: 200px; transform: rotateX(90deg) translateZ(-30px); background: repeating-linear-gradient(45deg, #1a1a2e, #1a1a2e 20px, #252540 20px, #252540 40px); }}
+        .ceiling {{ width: 200px; height: 200px; transform: rotateX(90deg) translateZ(80px); background: #0a0a15; }}
+        .wall-front {{ width: 200px; height: 110px; transform: translateZ(100px); background: linear-gradient(to bottom, #1a1a3a, #2a2a4a); }}
+        .wall-back {{ width: 200px; height: 110px; transform: translateZ(-100px) rotateY(180deg); background: linear-gradient(to bottom, #1a1a3a, #2a2a4a); }}
+        .wall-left {{ width: 200px; height: 110px; transform: translateX(-100px) rotateY(-90deg); background: linear-gradient(to bottom, #252545, #353560); }}
+        .wall-right {{ width: 200px; height: 110px; transform: translateX(100px) rotateY(90deg); background: linear-gradient(to bottom, #252545, #353560); }}
         
-        .ceiling {{
-            width: 200px;
-            height: 200px;
-            transform: rotateX(90deg) translateZ(80px);
-            background: #0a0a15;
-        }}
-        
-        .wall-front {{
-            width: 200px;
-            height: 110px;
-            transform: translateZ(100px);
-            background: linear-gradient(to bottom, #1a1a3a, #2a2a4a);
-        }}
-        
-        .wall-back {{
-            width: 200px;
-            height: 110px;
-            transform: translateZ(-100px) rotateY(180deg);
-            background: linear-gradient(to bottom, #1a1a3a, #2a2a4a);
-        }}
-        
-        .wall-left {{
-            width: 200px;
-            height: 110px;
-            transform: translateX(-100px) rotateY(-90deg);
-            background: linear-gradient(to bottom, #252545, #353560);
-        }}
-        
-        .wall-right {{
-            width: 200px;
-            height: 110px;
-            transform: translateX(100px) rotateY(90deg);
-            background: linear-gradient(to bottom, #252545, #353560);
-        }}
-        
-        /* CONTROLS */
         .controls {{
             display: grid;
             grid-template-columns: repeat(3, 1fr);
@@ -165,200 +125,56 @@ def generate_html_game(world_data: dict) -> str:
             margin: 20px auto;
         }}
         
-        .btn {{
-            padding: 15px;
-            font-size: 1.2em;
-            background: linear-gradient(145deg, #3a3a5a, #2a2a4a);
-            border: 2px solid #4a4a6a;
-            border-radius: 10px;
-            color: #fff;
-            cursor: pointer;
-            transition: all 0.2s;
-        }}
-        
-        .btn:hover {{
-            transform: scale(1.05);
-            box-shadow: 0 5px 20px rgba(255,215,0,0.3);
-            border-color: #ffd700;
-        }}
-        
-        .btn:active {{
-            transform: scale(0.95);
-        }}
-        
+        .btn {{ padding: 15px; font-size: 1.2em; background: linear-gradient(145deg, #3a3a5a, #2a2a4a); border: 2px solid #4a4a6a; border-radius: 10px; color: #fff; cursor: pointer; transition: all 0.2s; }}
+        .btn:hover {{ transform: scale(1.05); box-shadow: 0 5px 20px rgba(255,215,0,0.3); border-color: #ffd700; }}
+        .btn:active {{ transform: scale(0.95); }}
         .btn.move {{ background: linear-gradient(145deg, #3a5a8a, #2a4a7a); }}
-        .btn.action {{ background: linear-gradient(145deg, #5a8a3a, #4a7a2a); }}
         
-        /* INVENTORY & STATUS */
-        .status-bar {{
-            display: grid;
-            grid-template-columns: 1fr 1fr 1fr;
-            gap: 15px;
-            margin: 20px 0;
-        }}
+        .status-bar {{ display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 15px; margin: 20px 0; }}
         
-        .status-box {{
-            background: rgba(0,0,0,0.3);
-            border-radius: 15px;
-            padding: 15px;
-            text-align: center;
-        }}
+        .status-box {{ background: rgba(0,0,0,0.3); border-radius: 15px; padding: 15px; text-align: center; }}
+        .status-title {{ font-size: 0.9em; color: #888; margin-bottom: 5px; }}
+        .status-value {{ font-size: 1.2em; color: #4ecdc4; }}
         
-        .status-title {{
-            font-size: 0.9em;
-            color: #888;
-            margin-bottom: 5px;
-        }}
+        .entities {{ display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 15px; margin: 20px 0; }}
         
-        .status-value {{
-            font-size: 1.2em;
-            color: #4ecdc4;
-        }}
-        
-        /* ITEMS & NPCS */
-        .entities {{
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-            gap: 15px;
-            margin: 20px 0;
-        }}
-        
-        .entity-card {{
-            background: rgba(255,255,255,0.05);
-            border-radius: 10px;
-            padding: 15px;
-            text-align: center;
-            cursor: pointer;
-            transition: all 0.2s;
-        }}
-        
-        .entity-card:hover {{
-            background: rgba(255,255,255,0.1);
-            transform: translateY(-5px);
-        }}
-        
+        .entity-card {{ background: rgba(255,255,255,0.05); border-radius: 10px; padding: 15px; text-align: center; cursor: pointer; transition: all 0.2s; }}
+        .entity-card:hover {{ background: rgba(255,255,255,0.1); transform: translateY(-5px); }}
         .entity-icon {{ font-size: 2.5em; }}
         .entity-name {{ font-weight: bold; margin: 10px 0 5px; }}
         .entity-desc {{ font-size: 0.85em; color: #aaa; }}
         
-        /* EXITS */
-        .exits {{
-            display: flex;
-            justify-content: center;
-            gap: 15px;
-            margin: 20px 0;
-            flex-wrap: wrap;
-        }}
+        .exits {{ display: flex; justify-content: center; gap: 15px; margin: 20px 0; flex-wrap: wrap; }}
         
-        .exit-btn {{
-            padding: 10px 20px;
-            background: linear-gradient(145deg, #2a4a6a, #1a3a5a);
-            border: 2px solid #3a5a8a;
-            border-radius: 8px;
-            color: #4ecdc4;
-            cursor: pointer;
-            transition: all 0.2s;
-        }}
+        .exit-btn {{ padding: 10px 20px; background: linear-gradient(145deg, #2a4a6a, #1a3a5a); border: 2px solid #3a5a8a; border-radius: 8px; color: #4ecdc4; cursor: pointer; transition: all 0.2s; }}
+        .exit-btn:hover {{ background: linear-gradient(145deg, #3a6a9a, #2a5a8a); box-shadow: 0 5px 15px rgba(78,205,196,0.3); }}
         
-        .exit-btn:hover {{
-            background: linear-gradient(145deg, #3a6a9a, #2a5a8a);
-            box-shadow: 0 5px 15px rgba(78,205,196,0.3);
-        }}
-        
-        /* MESSAGE LOG */
-        .log {{
-            background: rgba(0,0,0,0.4);
-            border-radius: 10px;
-            padding: 15px;
-            margin: 20px 0;
-            max-height: 150px;
-            overflow-y: auto;
-        }}
-        
-        .log-entry {{
-            padding: 5px 0;
-            border-bottom: 1px solid rgba(255,255,255,0.1);
-        }}
-        
+        .log {{ background: rgba(0,0,0,0.4); border-radius: 10px; padding: 15px; margin: 20px 0; max-height: 150px; overflow-y: auto; }}
+        .log-entry {{ padding: 5px 0; border-bottom: 1px solid rgba(255,255,255,0.1); }}
         .log-entry:last-child {{ border-bottom: none; }}
         .log-action {{ color: #ffd700; }}
         .log-info {{ color: #4ecdc4; }}
         
-        /* FEEDBACK SECTION */
-        .feedback-section {{
-            background: rgba(255,107,107,0.1);
-            border-radius: 15px;
-            padding: 20px;
-            margin: 20px 0;
-        }}
+        .modal {{ position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.9); display: flex; align-items: center; justify-content: center; z-index: 100; }}
         
-        .feedback-title {{
-            font-size: 1.2em;
-            color: #ff6b6b;
-            margin-bottom: 15px;
-        }}
+        .modal-content {{ background: linear-gradient(145deg, #1a1a2e, #2a2a4e); border-radius: 20px; padding: 40px; text-align: center; max-width: 500px; }}
         
-        /* START GAME MODAL */
-        .modal {{
-            position: fixed;
-            top: 0;
-            left: 0;
-            right: 0;
-            bottom: 0;
-            background: rgba(0,0,0,0.9);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            z-index: 100;
-        }}
-        
-        .modal-content {{
-            background: linear-gradient(145deg, #1a1a2e, #2a2a4e);
-            border-radius: 20px;
-            padding: 40px;
-            text-align: center;
-            max-width: 500px;
-        }}
-        
-        .start-btn {{
-            padding: 20px 40px;
-            font-size: 1.5em;
-            background: linear-gradient(145deg, #6bcb77, #4a9a57);
-            border: none;
-            border-radius: 15px;
-            color: #fff;
-            cursor: pointer;
-            margin-top: 20px;
-        }}
-        
-        .start-btn:hover {{
-            transform: scale(1.05);
-            box-shadow: 0 10px 30px rgba(107,203,119,0.4);
-        }}
+        .start-btn {{ padding: 20px 40px; font-size: 1.5em; background: linear-gradient(145deg, #6bcb77, #4a9a57); border: none; border-radius: 15px; color: #fff; cursor: pointer; margin-top: 20px; }}
+        .start-btn:hover {{ transform: scale(1.05); box-shadow: 0 10px 30px rgba(107,203,119,0.4); }}
         
         footer {{ text-align: center; padding: 20px; color: #666; }}
     </style>
 </head>
 <body>
-    <!-- START MODAL -->
     <div class="modal" id="startModal">
         <div class="modal-content">
             <h1>🎪 {title} 🎪</h1>
             <p class="subtitle" style="margin: 20px 0;">{setting}</p>
-            
-            <div style="margin: 20px 0; text-align: left;">
-                <h3 style="color: #ffd700;">🎯 Objective:</h3>
-                <p style="color: #ccc; margin: 10px 0;">{world_data.get('win_condition', 'Explore and complete the adventure')}</p>
-                
-                <h3 style="color: #4ecdc4; margin-top: 20px;">🎮 Controls:</h3>
-                <p style="color: #aaa; margin: 10px 0;">
-                    ⬆️⬇️⬅️➡️ Move between rooms<br>
-                    📦 Click items to pick up<br>
-                    👤 Click NPCs to talk
-                </p>
-            </div>
-            
-            <button class="start-btn" onclick="startGame()">🎮 START ADVENTURE!</button>
+            <h3 style="color: #ffd700;">🎯 Objective:</h3>
+            <p style="color: #ccc; margin: 10px 0;">{win_condition}</p>
+            <h3 style="color: #4ecdc4; margin-top: 20px;">🎮 Controls:</h3>
+            <p style="color: #aaa; margin: 10px 0;">Move with buttons, click items to pick up, click NPCs to talk</p>
+            <button class="start-btn" onclick="startGame()">🎮 START!</button>
         </div>
     </div>
     
@@ -386,13 +202,8 @@ def generate_html_game(world_data: dict) -> str:
             
             <div class="room-desc" id="roomDesc">...</div>
             
-            <div class="exits" id="exits">
-                <!-- Exit buttons -->
-            </div>
-            
-            <div class="entities" id="entities">
-                <!-- Items and NPCs -->
-            </div>
+            <div class="exits" id="exits"></div>
+            <div class="entities" id="entities"></div>
             
             <div class="controls">
                 <div></div>
@@ -406,7 +217,7 @@ def generate_html_game(world_data: dict) -> str:
         
         <div class="status-bar">
             <div class="status-box">
-                <div class="status-title">📍 Current Room</div>
+                <div class="status-title">📍 Room</div>
                 <div class="status-value" id="currentRoom">-</div>
             </div>
             <div class="status-box">
@@ -420,29 +231,11 @@ def generate_html_game(world_data: dict) -> str:
         </div>
         
         <div class="log" id="gameLog">
-            <div class="log-entry log-info">🎮 Adventure started! Explore the world...</div>
-        </div>
-        
-        <!-- PERFORMER FEEDBACK SECTION -->
-        <div class="feedback-section">
-            <div class="feedback-title">💬 Performer Feedback (from AI loop)</div>
-            <div id="performerFeedback">
-                <p style="color: #aaa;">The AI performers explored this world and gave feedback to the Ringmaster...</p>
-            </div>
-        </div>
-        
-        <!-- AI PERFORMERS -->
-        <div class="viewport">
-            <h3 style="color: #4ecdc4; margin-bottom: 15px;">🎭 AI Performers also explored:</h3>
-            <div id="aiPerformers">
-                {''.join([f'<p style="color: #888;">🎭 {p["name"]} visited {p.get("room", "unknown")} with items: {", ".join(p.get("inventory", [])) or "none"}</p>' for p in performers]) if performers else '<p style="color: #888;">No performers explored yet...</p>'}
-            </div>
+            <div class="log-entry log-info">🎮 Adventure started!</div>
         </div>
     </div>
     
-    <footer>
-        🎪 Circus Arena | You ARE the performer! | Ringmaster AI created this world
-    </footer>
+    <footer>🎪 Circus Arena | You ARE the performer!</footer>
 
     <script>
         const gameData = {{
@@ -453,7 +246,7 @@ def generate_html_game(world_data: dict) -> str:
                 items: {items_json},
                 npcs: {npcs_json}
             }},
-            winCondition: "{world_data.get('win_condition', '')}"
+            winCondition: "{win_condition}"
         }};
         
         let currentRoom = "{start_room}";
@@ -465,7 +258,7 @@ def generate_html_game(world_data: dict) -> str:
             document.getElementById('startModal').style.display = 'none';
             gameStarted = true;
             renderRoom();
-            addLog("🎮 You begin your adventure!");
+            addLog("You begin your adventure!");
         }}
         
         function renderRoom() {{
@@ -483,113 +276,83 @@ def generate_html_game(world_data: dict) -> str:
             directions.forEach(dir => {{
                 if (room[dir]) {{
                     const targetRoom = gameData.world.rooms.find(r => r.id === room[dir]);
-                    exitsHtml += `<button class="exit-btn" onclick="move('${dir}')">⬆️ Go ${dir} to ${targetRoom?.name || 'room'}</button>`;
+                    const roomName = targetRoom ? targetRoom.name : 'room';
+                    exitsHtml += '<button class="exit-btn" onclick="move(\\'' + dir + '\\')">Go ' + dir + ' to ' + roomName + '</button>';
                 }}
             }});
-            if (!exitsHtml) exitsHtml = '<p style="color: #888;">No obvious exits...</p>';
+            if (!exitsHtml) exitsHtml = '<p style="color: #888;">No obvious exits</p>';
             exitsDiv.innerHTML = exitsHtml;
             
             // Render entities
             const entitiesDiv = document.getElementById('entities');
             let entitiesHtml = '';
             
-            // Items
             room.items?.forEach(itemId => {{
                 const item = gameData.world.items.find(i => i.id === itemId);
                 if (item) {{
-                    entitiesHtml += `
-                    <div class="entity-card" onclick="takeItem('{itemId}')">
-                        <div class="entity-icon">📦</div>
-                        <div class="entity-name">{item.name}</div>
-                        <div class="entity-desc">{item.description}</div>
-                        <div style="color: #6bcb77; margin-top: 5px;">Click to take!</div>
-                    </div>`;
+                    entitiesHtml += '<div class="entity-card" onclick="takeItem(\\'' + itemId + '\\')"><div class="entity-icon">📦</div><div class="entity-name">' + item.name + '</div><div class="entity-desc">' + item.description + '</div><div style="color: #6bcb77;">Click to take!</div></div>';
                 }}
             }});
             
-            // NPCs
             room.npcs?.forEach(npcId => {{
                 const npc = gameData.world.npcs.find(n => n.id === npcId);
                 if (npc) {{
-                    const roleIcons = {{'merchant': '🏪', 'guard': '🛡️', 'quest_giver': '📋', 'wizard': '🧙', 'guardian': '👹', 'default': '👤'}};
-                    const icon = roleIcons[npc.role] || roleIcons['default'];
-                    entitiesHtml += `
-                    <div class="entity-card" onclick="talk('${npcId}')">
-                        <div class="entity-icon">${icon}</div>
-                        <div class="entity-name">{npc.name}</div>
-                        <div class="entity-desc">Click to talk</div>
-                    </div>`;
+                    const icons = {{'merchant': '🏪', 'guard': '🛡️', 'quest_giver': '📋', 'wizard': '🧙', 'guardian': '👹'}};
+                    const icon = icons[npc.role] || '👤';
+                    entitiesHtml += '<div class="entity-card" onclick="talk(\\'' + npcId + '\\')"><div class="entity-icon">' + icon + '</div><div class="entity-name">' + npc.name + '</div><div class="entity-desc">Click to talk</div></div>';
                 }}
             }});
             
-            if (!entitiesHtml) entitiesHtml = '<p style="color: #888;">Nothing special here...</p>';
+            if (!entitiesHtml) entitiesHtml = '<p style="color: #888;">Nothing special here</p>';
             entitiesDiv.innerHTML = entitiesHtml;
         }}
         
         function move(direction) {{
             const room = gameData.world.rooms.find(r => r.id === currentRoom);
-            const nextRoomId = room?.[direction];
+            const nextRoomId = room && room[direction];
             
             if (nextRoomId) {{
                 currentRoom = nextRoomId;
                 steps++;
                 document.getElementById('steps').textContent = steps;
-                
                 const nextRoom = gameData.world.rooms.find(r => r.id === nextRoomId);
-                addLog(`⬆️ Moved ${direction} to ${nextRoom?.name || 'unknown'}`);
-                
+                addLog('Moved ' + direction + ' to ' + (nextRoom ? nextRoom.name : 'unknown'));
                 renderRoom();
-                checkWin();
             }} else {{
-                addLog(`❌ Can't go ${direction} from here`);
+                addLog('Cannot go ' + direction + ' from here', 'info');
             }}
         }}
         
         function takeItem(itemId) {{
             const room = gameData.world.rooms.find(r => r.id === currentRoom);
-            const idx = room?.items?.indexOf(itemId);
+            const idx = room && room.items ? room.items.indexOf(itemId) : -1;
             
             if (idx > -1) {{
                 room.items.splice(idx, 1);
                 inventory.push(itemId);
                 document.getElementById('inventory').textContent = inventory.length > 0 ? inventory.join(', ') : 'Empty';
-                
                 const item = gameData.world.items.find(i => i.id === itemId);
-                addLog(`📦 Took {item?.name || itemId}! ({item?.effect})`);
-                
+                addLog('Took ' + (item ? item.name : itemId));
                 renderRoom();
-                checkWin();
             }}
         }}
         
         function talk(npcId) {{
             const npc = gameData.world.npcs.find(n => n.id === npcId);
             if (npc) {{
-                addLog(`👤 {npc.name} says: "{npc.dialogue}"`);
-                
-                if (npc.quest) {{
-                    addLog(`📋 Quest: {npc.quest}`, 'action');
-                }}
+                addLog(npc.name + ' says: "' + npc.dialogue + '"', 'info');
+                if (npc.quest) addLog('Quest: ' + npc.quest, 'action');
             }}
         }}
         
         function addLog(message, type = 'action') {{
             const log = document.getElementById('gameLog');
             const entry = document.createElement('div');
-            entry.className = `log-entry log-${type}`;
+            entry.className = 'log-entry log-' + type;
             entry.textContent = message;
             log.insertBefore(entry, log.firstChild);
         }}
         
-        function checkWin() {{
-            // Simple win check - got treasure or key + reached treasure room
-            if (inventory.includes('treasure') || 
-                (inventory.includes('key') && currentRoom === 'treasure')) {{
-                addLog('🏆 VICTORY! You completed the adventure!', 'info');
-            }}
-        }}
-        
-        // Initialize
         renderRoom();
     </script>
 </body>
@@ -599,7 +362,6 @@ def generate_html_game(world_data: dict) -> str:
 
 
 def save_html_game(world_data: dict, filename: str = "play_adventure.html") -> str:
-    """Save the playable HTML game"""
     html = generate_html_game(world_data)
     with open(filename, 'w', encoding='utf-8') as f:
         f.write(html)
