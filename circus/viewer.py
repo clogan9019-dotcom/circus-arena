@@ -1,11 +1,12 @@
 """
-Viewer - Spectate the AI performers playing through the adventure!
+Viewer - 3D Spectator view with local server!
 """
 import json
+import os
 
 
 def generate_viewer(game_engine) -> str:
-    """Generate an animated viewer to watch AI performers play"""
+    """Generate 3D spectator viewer with A-Frame"""
     
     world = game_engine.world
     performers = game_engine.performers
@@ -14,32 +15,38 @@ def generate_viewer(game_engine) -> str:
     rooms = world.get('world', {}).get('rooms', [])
     items = world.get('world', {}).get('items', [])
     npcs = world.get('world', {}).get('npcs', [])
+    start_room = world.get('start_room', 'room_1')
+    
+    title = world.get('title', 'Unknown')
     
     rooms_json = json.dumps(rooms)
     items_json = json.dumps(items)
     npcs_json = json.dumps(npcs)
-    start_room = world.get('start_room', 'room_1')
     
     performers_json = json.dumps([
-        {
-            "name": p.name,
-            "color": ["#4169E1", "#FF6347", "#32CD32", "#FFD700"][i % 4],
-            "start_room": start_room
-        }
+        {"name": p.name, "color": ["#4169E1", "#FF6347", "#32CD32", "#FFD700"][i % 4]}
         for i, p in enumerate(performers)
     ])
     
     feedback_data = json.dumps([fb for rev in revisions for fb in rev.get('feedback', [])])
-    revisions_data = json.dumps([{"round": r.get('round', 0), "improvements": r.get('improvements', '')} for r in revisions])
     
-    title = world.get('title', 'Unknown')
+    # Generate room positions for 3D grid
+    room_positions = []
+    grid_size = 4
+    for i, room in enumerate(rooms):
+        x = (i % grid_size) * 10 - (grid_size * 10) / 2
+        z = (i // grid_size) * 10 - (len(rooms) // grid_size) * 5
+        room_positions.append({"id": room['id'], "x": x, "z": z, "name": room['name']})
+    
+    room_pos_json = json.dumps(room_positions)
     
     html = f'''<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>🎪 Watch AI Performers Play! - Circus Arena</title>
+    <title>🎪 3D Spectate: {title}</title>
+    <script src="https://aframe.io/releases/1.4.0/aframe.min.js"></script>
     <style>
         * {{ margin: 0; padding: 0; box-sizing: border-box; }}
         
@@ -47,115 +54,156 @@ def generate_viewer(game_engine) -> str:
             font-family: 'Segoe UI', system-ui, sans-serif;
             background: linear-gradient(135deg, #0f0c29, #302b63, #24243e);
             color: #fff;
-            min-height: 100vh;
+            height: 100vh;
+            overflow: hidden;
         }}
         
-        .container {{ max-width: 1400px; margin: 0 auto; padding: 20px; }}
-        
-        header {{
-            text-align: center;
-            padding: 30px 0;
-            background: linear-gradient(90deg, #ff6b6b, #ffd93d, #6bcb77, #4d96ff);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
+        #game-container {{
+            width: 100%;
+            height: 60vh;
+            position: relative;
         }}
         
-        h1 {{ font-size: 2.5em; }}
-        
-        .viewer-grid {{
-            display: grid;
-            grid-template-columns: 2fr 1fr;
-            gap: 20px;
-        }}
-        
-        .map-view, .performers-panel, .action-log, .feedback-section {{
+        #controls-panel {{
+            height: 40vh;
             background: #0d0d1a;
-            border-radius: 20px;
-            padding: 25px;
-            box-shadow: 0 10px 40px rgba(0,0,0,0.5);
+            padding: 20px;
+            overflow-y: auto;
         }}
         
-        .map-title {{ font-size: 1.3em; color: #ffd700; margin-bottom: 20px; text-align: center; }}
-        
-        .map-grid {{
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
-            gap: 10px;
-            max-width: 600px;
-            margin: 0 auto;
-        }}
-        
-        .map-cell {{
-            background: rgba(255,255,255,0.05);
-            border-radius: 10px;
-            padding: 15px;
-            text-align: center;
-            min-height: 80px;
-            border: 2px solid transparent;
-            transition: all 0.3s;
-        }}
-        
-        .map-cell.current {{ border-color: #4ecdc4; background: rgba(78,205,196,0.1); }}
-        
-        .cell-name {{ font-weight: bold; font-size: 0.85em; margin-bottom: 5px; }}
-        .cell-icon {{ font-size: 1.5em; }}
-        .cell-items {{ font-size: 0.7em; color: #ffd700; margin-top: 5px; }}
-        
-        .panel-title {{ font-size: 1.2em; color: #4ecdc4; margin-bottom: 20px; display: flex; align-items: center; gap: 10px; }}
-        
-        .performer-card {{
-            background: rgba(255,255,255,0.05);
-            border-radius: 12px;
-            padding: 15px;
-            margin-bottom: 15px;
-            border-left: 4px solid;
-        }}
-        
-        .performer-name {{ font-weight: bold; font-size: 1.1em; }}
-        .performer-stats {{ color: #aaa; font-size: 0.9em; margin-top: 10px; }}
-        
-        .action-log {{ grid-column: 1 / -1; max-height: 250px; overflow-y: auto; }}
-        
-        .log-entry {{
-            padding: 12px;
-            border-bottom: 1px solid rgba(255,255,255,0.1);
+        .controls-bar {{
             display: flex;
-            align-items: center;
+            justify-content: center;
+            gap: 15px;
+            margin-bottom: 15px;
+            flex-wrap: wrap;
+        }}
+        
+        .ctrl-btn {{
+            padding: 10px 20px;
+            font-size: 1em;
+            background: linear-gradient(145deg, #3a3a5a, #2a2a4a);
+            border: 2px solid #4a4a6a;
+            border-radius: 8px;
+            color: #fff;
+            cursor: pointer;
+        }}
+        
+        .ctrl-btn:hover {{ transform: scale(1.05); border-color: #ffd700; }}
+        .ctrl-btn.play {{ background: linear-gradient(145deg, #6bcb77, #4a9a57); border-color: #6bcb77; }}
+        
+        .progress-container {{
+            background: #333;
+            border-radius: 5px;
+            height: 6px;
+            margin-bottom: 15px;
+        }}
+        
+        .progress-fill {{
+            height: 100%;
+            background: linear-gradient(90deg, #4ecdc4, #ffd700);
+            transition: width 0.3s;
+        }}
+        
+        .info-grid {{
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
             gap: 15px;
         }}
         
-        .log-turn {{ background: #ffd700; color: #000; padding: 3px 10px; border-radius: 10px; font-size: 0.8em; font-weight: bold; }}
-        .log-performer {{ font-weight: bold; min-width: 100px; }}
-        .log-action {{ color: #4ecdc4; }}
+        .info-panel {{
+            background: rgba(255,255,255,0.05);
+            border-radius: 12px;
+            padding: 15px;
+        }}
         
-        .controls-bar {{ display: flex; justify-content: center; gap: 15px; margin: 20px 0; }}
+        .panel-title {{
+            font-size: 1.1em;
+            color: #ffd700;
+            margin-bottom: 10px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }}
         
-        .ctrl-btn {{ padding: 12px 25px; font-size: 1.1em; background: linear-gradient(145deg, #3a3a5a, #2a2a4a); border: 2px solid #4a4a6a; border-radius: 10px; color: #fff; cursor: pointer; transition: all 0.2s; }}
-        .ctrl-btn:hover {{ transform: scale(1.05); border-color: #ffd700; }}
-        .ctrl-btn.play {{ background: linear-gradient(145deg, #6bcb77, #4a9a57); }}
+        .performer-card {{
+            background: rgba(0,0,0,0.3);
+            border-radius: 8px;
+            padding: 12px;
+            margin-bottom: 10px;
+            border-left: 3px solid;
+        }}
         
-        .progress-container {{ background: #333; border-radius: 10px; height: 8px; overflow: hidden; margin: 10px 0; }}
-        .progress-fill {{ height: 100%; background: linear-gradient(90deg, #4ecdc4, #ffd700); transition: width 0.3s; }}
+        .performer-name {{ font-weight: bold; }}
+        .performer-info {{ color: #aaa; font-size: 0.9em; margin-top: 5px; }}
         
-        .feedback-section {{ grid-column: 1 / -1; background: linear-gradient(145deg, rgba(255,107,107,0.1), rgba(0,0,0,0.3)); }}
-        .feedback-title {{ color: #ff6b6b; font-size: 1.2em; margin-bottom: 15px; }}
-        .feedback-item {{ background: rgba(0,0,0,0.3); border-radius: 10px; padding: 15px; margin-bottom: 10px; }}
+        .action-log {{
+            max-height: 150px;
+            overflow-y: auto;
+        }}
         
-        .room-view {{ grid-column: 1 / -1; text-align: center; padding: 20px; }}
-        .room-name {{ font-size: 1.8em; color: #ffd700; margin-bottom: 10px; }}
-        .room-desc {{ color: #ccc; }}
+        .log-entry {{
+            padding: 8px;
+            border-bottom: 1px solid rgba(255,255,255,0.1);
+            font-size: 0.9em;
+        }}
         
-        footer {{ text-align: center; padding: 20px; color: #666; }}
+        .log-turn {{ background: #ffd700; color: #000; padding: 2px 8px; border-radius: 5px; font-size: 0.8em; margin-right: 8px; }}
         
-        @media (max-width: 768px) {{ .viewer-grid {{ grid-template-columns: 1fr; }} }}
+        .feedback-item {{
+            background: rgba(0,0,0,0.3);
+            border-radius: 8px;
+            padding: 10px;
+            margin-bottom: 8px;
+            font-size: 0.9em;
+            color: #ccc;
+        }}
+        
+        .current-room {{
+            font-size: 1.5em;
+            color: #4ecdc4;
+            text-align: center;
+            padding: 10px;
+        }}
+        
+        .speed-control {{
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }}
+        
+        .speed-control input {{
+            width: 100px;
+        }}
     </style>
 </head>
 <body>
-    <div class="container">
-        <header>
-            <h1>🎪 SPECTATE: AI PERFORMERS PLAY! 🎪</h1>
-            <p style="color: #aaa;">Watch the 0.5B models explore the ringmaster's world</p>
-        </header>
+    <div id="game-container">
+        <a-scene embedded>
+            <a-entity id="rig" position="0 5 20" rotation="-20 0 0">
+                <a-camera></a-camera>
+            </a-entity>
+            
+            <!-- Sky -->
+            <a-sky color="#0f0c29"></a-sky>
+            
+            <!-- Ground -->
+            <a-plane position="0 0 0" rotation="-90 0 0" width="100" height="100" color="#1a1a2e"></a-plane>
+            
+            <!-- Rooms will be added here by JavaScript -->
+            <a-entity id="rooms-container"></a-entity>
+            
+            <!-- Performer markers -->
+            <a-entity id="performers-container"></a-entity>
+            
+            <!-- Lighting -->
+            <a-light type="ambient" color="#404040"></a-light>
+            <a-light type="directional" position="1 1 1" intensity="0.5"></a-light>
+        </a-scene>
+    </div>
+    
+    <div id="controls-panel">
+        <div class="current-room" id="currentRoomName">🎪 {title}</div>
         
         <div class="controls-bar">
             <button class="ctrl-btn" onclick="stepBack()">⏮️ Back</button>
@@ -164,44 +212,35 @@ def generate_viewer(game_engine) -> str:
             <button class="ctrl-btn" onclick="resetSim()">🔄 Reset</button>
         </div>
         
+        <div class="controls-bar">
+            <div class="speed-control">
+                <span>Speed:</span>
+                <input type="range" id="speedSlider" min="500" max="3000" value="1500" onchange="setSpeed(this.value)">
+                <span id="speedValue">1.5s</span>
+            </div>
+        </div>
+        
         <div class="progress-container">
             <div class="progress-fill" id="progress" style="width: 0%"></div>
         </div>
         
-        <div class="viewer-grid">
-            <div class="map-view">
-                <div class="map-title">🗺️ WORLD MAP</div>
-                <div class="map-grid" id="mapGrid"></div>
-            </div>
-            
-            <div class="performers-panel">
-                <div class="panel-title">🎭 AI PERFORMERS</div>
+        <div class="info-grid">
+            <div class="info-panel">
+                <div class="panel-title">🎭 Performers</div>
                 <div id="performersList"></div>
             </div>
             
-            <div class="room-view">
-                <div class="room-name" id="currentRoomName">-</div>
-                <div class="room-desc" id="currentRoomDesc">-</div>
+            <div class="info-panel">
+                <div class="panel-title">📜 Action Log</div>
+                <div class="action-log" id="actionLog"></div>
             </div>
             
-            <div class="action-log">
-                <div class="panel-title">📜 ACTION LOG</div>
-                <div id="actionLog">
-                    <div class="log-entry">
-                        <span class="log-turn">START</span>
-                        <span class="log-action">🧠 Ringmaster created: {title}</span>
-                    </div>
-                </div>
-            </div>
-            
-            <div class="feedback-section">
-                <div class="feedback-title">💬 FEEDBACK TO RINGMASTER</div>
+            <div class="info-panel" style="grid-column: 1 / -1;">
+                <div class="panel-title">💬 Feedback to Ringmaster</div>
                 <div id="feedbackList"></div>
             </div>
         </div>
     </div>
-    
-    <footer>🎪 Circus Arena | Watching {len(performers)} performers explore</footer>
 
     <script>
         const gameData = {{
@@ -213,24 +252,221 @@ def generate_viewer(game_engine) -> str:
                 startRoom: "{start_room}"
             }},
             performers: {performers_json},
-            feedback: {feedback_data},
-            revisions: {revisions_data}
+            roomPositions: {room_pos_json},
+            feedback: {feedback_data}
         }};
         
         let currentStep = 0;
         let isPlaying = false;
         let playInterval = null;
+        let stepDelay = 1500;
+        
         const simulationSteps = generateSimulation();
+        
+        // Initialize A-Frame scene
+        document.querySelector('a-scene').addEventListener('loaded', function() {{
+            init();
+        }});
+        
+        function init() {{
+            renderRooms();
+            renderPerformers();
+            renderFeedback();
+            addLog('START', '🧠 Ringmaster created: {title}');
+            updateView();
+            
+            // Auto-rotate camera
+            let angle = 0;
+            setInterval(function() {{
+                if (!isPlaying) {{
+                    angle += 0.1;
+                    const rig = document.getElementById('rig');
+                    const radius = 25;
+                    rig.setAttribute('position', (Math.sin(angle * 0.5) * radius) + ' 5 ' + (Math.cos(angle * 0.5) * radius));
+                    rig.setAttribute('rotation', '-20 ' + (angle * 30) + ' 0');
+                }}
+            }}, 50);
+        }}
+        
+        function renderRooms() {{
+            const container = document.getElementById('rooms-container');
+            const roomPositions = gameData.roomPositions;
+            
+            roomPositions.forEach(function(roomPos, idx) {{
+                const room = gameData.world.rooms.find(function(r) {{ return r.id === roomPos.id; }});
+                if (!room) return;
+                
+                // Room box
+                const roomEl = document.createElement('a-box');
+                roomEl.setAttribute('position', roomPos.x + ' 1.5 ' + roomPos.z);
+                roomEl.setAttribute('width', '6');
+                roomEl.setAttribute('height', '3');
+                roomEl.setAttribute('depth', '6');
+                roomEl.setAttribute('color', getRoomColor(room.theme || 'default'));
+                roomEl.setAttribute('opacity', '0.8');
+                roomEl.setAttribute('id', 'room-' + room.id);
+                container.appendChild(roomEl);
+                
+                // Room label
+                const label = document.createElement('a-text');
+                label.setAttribute('value', room.name);
+                label.setAttribute('position', roomPos.x + ' 4 ' + roomPos.z);
+                label.setAttribute('align', 'center');
+                label.setAttribute('color', '#ffd700');
+                label.setAttribute('width', '8');
+                container.appendChild(label);
+                
+                // Add exits as arrows
+                const exits = ['north', 'south', 'east', 'west'];
+                exits.forEach(function(dir) {{
+                    if (room[dir]) {{
+                        const arrow = document.createElement('a-cone');
+                        const offset = {{'north': [0, 0, 3], 'south': [0, 0, -3], 'east': [3, 0, 0], 'west': [-3, 0, 0]}};
+                        const rotation = {{'north': [90, 0, 0], 'south': [-90, 0, 0], 'east': [90, 90, 0], 'west': [90, -90, 0]}};
+                        arrow.setAttribute('position', (roomPos.x + offset[dir][0]) + ' 0.5 ' + (roomPos.z + offset[dir][2]));
+                        arrow.setAttribute('rotation', rotation[dir].join(' '));
+                        arrow.setAttribute('radius-bottom', '0.3');
+                        arrow.setAttribute('radius-top', '0');
+                        arrow.setAttribute('height', '0.5');
+                        arrow.setAttribute('color', '#4ecdc4');
+                        container.appendChild(arrow);
+                    }}
+                }});
+            }});
+        }}
+        
+        function getRoomColor(theme) {{
+            const colors = {{
+                'fire': '#8B0000',
+                'water': '#00008B',
+                'mystic': '#4B0082',
+                'temple': '#556B2F',
+                'cave': '#2F4F4F',
+                'default': '#2a2a4a'
+            }};
+            return colors[theme] || colors['default'];
+        }}
+        
+        function renderPerformers() {{
+            const list = document.getElementById('performersList');
+            let html = '';
+            
+            gameData.performers.forEach(function(p, idx) {{
+                html += '<div class="performer-card" style="border-color: ' + p.color + '">' +
+                    '<div class="performer-name" style="color: ' + p.color + '">🎭 ' + p.name + '</div>' +
+                    '<div class="performer-info">📍 <span id="perf-room-' + idx + '">Starting...</span></div>' +
+                    '</div>';
+            }});
+            
+            list.innerHTML = html;
+            
+            // Create 3D performer markers
+            const container = document.getElementById('performers-container');
+            gameData.performers.forEach(function(p, idx) {{
+                const marker = document.createElement('a-sphere');
+                marker.setAttribute('radius', '0.5');
+                marker.setAttribute('color', p.color);
+                marker.setAttribute('position', '0 2 0');
+                marker.setAttribute('id', 'performer-' + idx);
+                
+                // Add glow
+                const glow = document.createElement('a-sphere');
+                glow.setAttribute('radius', '0.8');
+                glow.setAttribute('color', p.color);
+                glow.setAttribute('opacity', '0.3');
+                glow.setAttribute('id', 'performer-glow-' + idx);
+                
+                container.appendChild(marker);
+                container.appendChild(glow);
+            }});
+        }}
+        
+        function renderFeedback() {{
+            const list = document.getElementById('feedbackList');
+            if (gameData.feedback.length === 0) {{
+                list.innerHTML = '<div class="feedback-item">No feedback collected yet...</div>';
+                return;
+            }}
+            
+            let html = '';
+            gameData.feedback.slice(0, 3).forEach(function(fb, idx) {{
+                html += '<div class="feedback-item"><strong>💬 ' + gameData.performers[idx % gameData.performers.length].name + ':</strong> ' + fb.substring(0, 150) + '...</div>';
+            }});
+            
+            list.innerHTML = html;
+        }}
+        
+        function updateView() {{
+            const step = simulationSteps[currentStep];
+            const targetRoom = step ? step.to : gameData.world.startRoom;
+            const roomPos = gameData.roomPositions.find(function(rp) {{ return rp.id === targetRoom; }});
+            
+            // Update performer 3D positions
+            gameData.performers.forEach(function(p, idx) {{
+                const performer = document.getElementById('performer-' + idx);
+                const glow = document.getElementById('performer-glow-' + idx);
+                
+                if (performer && roomPos) {{
+                    const offsetX = (idx - 0.5) * 1.5;
+                    performer.setAttribute('position', (roomPos.x + offsetX) + ' 2 ' + roomPos.z);
+                    glow.setAttribute('position', (roomPos.x + offsetX) + ' 2 ' + roomPos.z);
+                    
+                    // Bounce animation
+                    performer.setAttribute('animation', 'property: position; to: ' + (roomPos.x + offsetX) + ' 2.5 ' + roomPos.z + '; dir: alternate; dur: 500; loop: true');
+                }}
+                
+                const roomEl = document.getElementById('perf-room-' + idx);
+                if (roomEl) roomEl.textContent = roomPos ? roomPos.name : targetRoom;
+            }});
+            
+            // Highlight current room
+            document.querySelectorAll('[id^="room-"]').forEach(function(el) {{
+                el.setAttribute('opacity', '0.5');
+            }});
+            const currentRoomEl = document.getElementById('room-' + targetRoom);
+            if (currentRoomEl) currentRoomEl.setAttribute('opacity', '1');
+            
+            // Update current room display
+            const room = gameData.world.rooms.find(function(r) {{ return r.id === targetRoom; }});
+            document.getElementById('currentRoomName').textContent = room ? '📍 ' + room.name : '🎪 ' + gameData.world.title;
+            
+            // Update log
+            if (step) {{
+                if (step.type === 'move') {{
+                    addLog(step.turn, '🎭 ' + step.performer + ' moved ' + step.direction + ' to ' + step.to);
+                }} else if (step.type === 'feedback') {{
+                    addLog('FB', '💬 ' + step.performer + ' gave feedback');
+                }} else if (step.type === 'improvement') {{
+                    addLog('✨', '🧠 Ringmaster improved the world');
+                }}
+            }}
+            
+            // Progress bar
+            const progress = (currentStep / Math.max(simulationSteps.length, 1)) * 100;
+            document.getElementById('progress').style.width = progress + '%';
+        }}
+        
+        function addLog(turn, message) {{
+            const log = document.getElementById('actionLog');
+            const entry = document.createElement('div');
+            entry.className = 'log-entry';
+            entry.innerHTML = '<span class="log-turn">' + turn + '</span>' + message;
+            log.insertBefore(entry, log.firstChild);
+            
+            // Keep only last 20 entries
+            while (log.children.length > 20) {{
+                log.removeChild(log.lastChild);
+            }}
+        }}
         
         function generateSimulation() {{
             const steps = [];
             const rooms = gameData.world.rooms;
-            const performers = gameData.performers;
             
-            performers.forEach(function(p, pIdx) {{
+            gameData.performers.forEach(function(p, pIdx) {{
                 let pos = gameData.world.startRoom;
                 
-                for (let i = 0; i < 6; i++) {{
+                for (let i = 0; i < 12; i++) {{
                     const currentRoom = rooms.find(function(r) {{ return r.id === pos; }});
                     const exits = ['north', 'south', 'east', 'west'].filter(function(d) {{ return currentRoom && currentRoom[d]; }});
                     
@@ -256,131 +492,13 @@ def generate_viewer(game_engine) -> str:
             gameData.feedback.forEach(function(fb, idx) {{
                 steps.push({{
                     type: 'feedback',
-                    performer: performers[idx % performers.length].name,
+                    performer: gameData.performers[idx % gameData.performers.length].name,
                     text: fb,
                     turn: steps.length + 1
                 }});
             }});
             
-            gameData.revisions.forEach(function(rev) {{
-                steps.push({{
-                    type: 'improvement',
-                    round: rev.round,
-                    text: rev.improvements,
-                    turn: steps.length + 1
-                }});
-            }});
-            
             return steps;
-        }}
-        
-        function init() {{
-            renderMap();
-            renderPerformers();
-            renderFeedback();
-            updateView();
-        }}
-        
-        function renderMap() {{
-            const grid = document.getElementById('mapGrid');
-            const rooms = gameData.world.rooms;
-            let html = '';
-            
-            rooms.forEach(function(room) {{
-                const roomItems = room.items ? room.items.map(function(id) {{
-                    const item = gameData.world.items.find(function(i) {{ return i.id === id; }});
-                    return item ? item.name : id;
-                }}).join(', ') : '';
-                
-                html += '<div class="map-cell" id="cell-' + room.id + '">' +
-                    '<div class="cell-icon">🚪</div>' +
-                    '<div class="cell-name">' + room.name + '</div>' +
-                    '<div class="cell-items">' + roomItems + '</div>' +
-                    '</div>';
-            }});
-            
-            grid.innerHTML = html;
-        }}
-        
-        function renderPerformers() {{
-            const list = document.getElementById('performersList');
-            let html = '';
-            
-            gameData.performers.forEach(function(p, idx) {{
-                html += '<div class="performer-card" style="border-color: ' + p.color + '">' +
-                    '<div class="performer-name" style="color: ' + p.color + '">🎭 ' + p.name + '</div>' +
-                    '<div class="performer-stats">📍 <span id="performer-room-' + idx + '">Starting...</span></div>' +
-                    '<div class="performer-stats">👟 Steps: <span id="performer-steps-' + idx + '">0</span></div>' +
-                    '</div>';
-            }});
-            
-            list.innerHTML = html;
-        }}
-        
-        function renderFeedback() {{
-            const list = document.getElementById('feedbackList');
-            if (gameData.feedback.length === 0) {{
-                list.innerHTML = '<p style="color: #888;">No feedback collected yet...</p>';
-                return;
-            }}
-            
-            let html = '';
-            gameData.feedback.slice(0, 5).forEach(function(fb, idx) {{
-                html += '<div class="feedback-item"><strong>💬 Feedback from Performer ' + (idx + 1) + ':</strong>' +
-                    '<p style="margin-top: 10px; color: #ccc;">' + fb.substring(0, 200) + '...</p></div>';
-            }});
-            
-            list.innerHTML = html;
-        }}
-        
-        function updateView() {{
-            const step = simulationSteps[currentStep];
-            const targetRoom = step ? step.to : gameData.world.startRoom;
-            
-            document.querySelectorAll('.map-cell').forEach(function(cell) {{
-                cell.classList.remove('current');
-            }});
-            
-            gameData.performers.forEach(function(p, idx) {{
-                const roomEl = document.getElementById('performer-room-' + idx);
-                const stepsEl = document.getElementById('performer-steps-' + idx);
-                if (roomEl) roomEl.textContent = targetRoom;
-                if (stepsEl) stepsEl.textContent = idx + 1;
-            }});
-            
-            const room = gameData.world.rooms.find(function(r) {{ return r.id === targetRoom; }});
-            if (document.getElementById('currentRoomName')) {{
-                document.getElementById('currentRoomName').textContent = room ? room.name : 'Room';
-            }}
-            if (document.getElementById('currentRoomDesc')) {{
-                document.getElementById('currentRoomDesc').textContent = room ? room.description : '';
-            }}
-            
-            if (step) {{
-                const log = document.getElementById('actionLog');
-                const entry = document.createElement('div');
-                entry.className = 'log-entry';
-                
-                if (step.type === 'move') {{
-                    const performer = gameData.performers[step.performerIdx];
-                    entry.innerHTML = '<span class="log-turn">' + step.turn + '</span>' +
-                        '<span class="log-performer" style="color: ' + (performer ? performer.color : '#fff') + '">🎭 ' + step.performer + '</span>' +
-                        '<span class="log-action">➡️ Moved ' + step.direction + ' to ' + step.to + '</span>';
-                }} else if (step.type === 'feedback') {{
-                    entry.innerHTML = '<span class="log-turn">FB</span>' +
-                        '<span class="log-performer">💬 ' + step.performer + '</span>' +
-                        '<span class="log-action">Gave feedback!</span>';
-                }} else if (step.type === 'improvement') {{
-                    entry.innerHTML = '<span class="log-turn">✨</span>' +
-                        '<span class="log-performer">🧠 Ringmaster</span>' +
-                        '<span class="log-action">Improved world!</span>';
-                }}
-                
-                log.insertBefore(entry, log.firstChild);
-            }}
-            
-            const progress = (currentStep / Math.max(simulationSteps.length, 1)) * 100;
-            document.getElementById('progress').style.width = progress + '%';
         }}
         
         function stepForward() {{
@@ -399,7 +517,8 @@ def generate_viewer(game_engine) -> str:
         
         function resetSim() {{
             currentStep = 0;
-            document.getElementById('actionLog').innerHTML = '<div class="log-entry"><span class="log-turn">START</span><span class="log-action">🧠 Ringmaster created: ' + gameData.world.title + '</span></div>';
+            document.getElementById('actionLog').innerHTML = '';
+            addLog('START', '🧠 Ringmaster created: ' + gameData.world.title);
             updateView();
         }}
         
@@ -423,11 +542,19 @@ def generate_viewer(game_engine) -> str:
                     }} else {{
                         togglePlay();
                     }}
-                }}, 1500);
+                }}, stepDelay);
             }}
         }}
         
-        init();
+        function setSpeed(value) {{
+            stepDelay = parseInt(value);
+            document.getElementById('speedValue').textContent = (value / 1000) + 's';
+            
+            if (isPlaying) {{
+                clearInterval(playInterval);
+                playInterval = setInterval(stepForward, stepDelay);
+            }}
+        }}
     </script>
 </body>
 </html>'''

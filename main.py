@@ -2,7 +2,7 @@
 """
 Circus Arena - Ringmaster Edition!
 
-🧠 Ringmaster (14B) creates world
+🧠 Ringmaster (14B) creates world - takes DECENT TIME to finish!
 🎭 Performers (0.5B) play the game  
 💬 Performers give FEEDBACK to Ringmaster
 🧠 Ringmaster IMPROVES based on feedback
@@ -10,25 +10,41 @@ Circus Arena - Ringmaster Edition!
 """
 import time
 import os
+import threading
+import http.server
+import socketserver
 
-from circus import GameEngine
-from circus.html_generator import save_html_game
-from circus.viewer import save_viewer
+
+# Simple HTTP server for the HTML file
+def start_server(port=8080, filename="spectate.html"):
+    """Start a simple HTTP server to serve the HTML file"""
+    os.chdir(os.path.dirname(os.path.abspath(filename)) or '.')
+    
+    Handler = http.server.SimpleHTTPRequestHandler
+    with socketserver.TCPServer(("", port), Handler) as httpd:
+        print(f"\n🌐 Local server running!")
+        print(f"   Open: http://localhost:{port}/{filename}")
+        print(f"   Or just: http://localhost:{port}")
+        print(f"\n   Press Ctrl+C to stop the server")
+        httpd.serve_forever()
 
 
 def main():
+    from circus import GameEngine
+    from circus.viewer import save_viewer
+    
     print("\n" + "=" * 50)
     print("🎪 CIRCUS ARENA - Ringmaster Edition! 🎪")
     print("=" * 50)
     print("""
-    LOOP:
-    🧠 Ringmaster (14B) creates world
-       ↓
-    🎭 Performers (0.5B) play
+    🧠 Ringmaster (14B) creates WORLD
+       Takes DECENT TIME to finish! (15-25 steps)
+    
+    🎭 Performers (0.5B) PLAY the game
        ↓
     💬 Feedback -> RINGMASTER
        ↓
-    🧠 Ringmaster improves world
+    🧠 Ringmaster IMPROVES
        ↓
     🔄 Repeat!
     """)
@@ -56,32 +72,45 @@ def main():
         improvement = engine.ringmaster_improves(feedback, round_num)
         
         if improvement.get('improved'):
-            print("\n   📖 New adventure version:")
-            print(f"   {engine.world.get('title', 'Unknown')}")
+            print("\n   📖 Ringmaster improved the adventure!")
         
         time.sleep(0.5)
     
-    # Generate both outputs
+    # Generate spectate HTML
     print("\n" + "=" * 60)
-    print("🎮 GENERATING OUTPUTS")
+    print("🎮 GENERATING 3D SPECTATE VIEWER")
     print("=" * 60)
     
-    # 1. PLAYABLE GAME - YOU can play it
-    play_file = save_html_game(engine.get_render_data(), "play_adventure.html")
+    filename = "spectate.html"
+    save_viewer(engine, filename)
     
-    # 2. SPECTATOR VIEW - WATCH the AI play!
-    spectate_file = save_viewer(engine, "spectate.html")
+    full_path = os.path.abspath(filename)
+    print(f"\n✅ Saved: {full_path}")
     
-    print(f"\n✅ PLAYABLE GAME (YOU play): {os.path.abspath(play_file)}")
-    print(f"✅ SPECTATOR VIEW (WATCH AI): {os.path.abspath(spectate_file)}")
-    print("\n🌐 Opening SPECTATOR VIEW...")
+    # Start local server in background
+    print("\n" + "=" * 60)
+    print("🌐 STARTING LOCAL SERVER")
+    print("=" * 60)
     
-    # Open spectator view by default
+    # Run server in thread
+    server_thread = threading.Thread(target=start_server, args=(8080, filename), daemon=True)
+    server_thread.start()
+    
+    # Give it a moment to start
+    time.sleep(1)
+    
+    print(f"\n🎉 Open your browser and go to:")
+    print(f"   http://localhost:8080")
+    print(f"\n   You'll see 3D rooms, performers moving around,")
+    print(f"   action logs, and feedback to the Ringmaster!")
+    print(f"\n   Press Ctrl+C in this window to stop the server")
+    
+    # Keep running so user can view
     try:
-        import webbrowser
-        webbrowser.open(f'file://{os.path.abspath(spectate_file)}')
-    except:
-        pass
+        while True:
+            time.sleep(1)
+    except KeyboardInterrupt:
+        print("\n\n👋 Server stopped!")
 
 
 if __name__ == "__main__":
