@@ -1,12 +1,19 @@
 #!/usr/bin/env python3
 """
 Circus Arena - Ringmaster Edition!
+
+🧠 Ringmaster (14B) creates world
+🎭 Performers (0.5B) play the game  
+💬 Performers give FEEDBACK to Ringmaster
+🧠 Ringmaster IMPROVES based on feedback
+🔄 Repeat!
 """
 import time
 import os
 
 from circus import GameEngine
 from circus.html_generator import save_html_game
+from circus.viewer import save_viewer
 
 
 def main():
@@ -33,7 +40,7 @@ def main():
     )
     
     engine.start_game()
-    num_rounds = 2  # Fewer rounds for faster generation
+    num_rounds = 2
     
     print("\n" + "=" * 60)
     print(f"🎮 PLAYING {num_rounds} ROUNDS WITH FEEDBACK LOOP")
@@ -54,23 +61,25 @@ def main():
         
         time.sleep(0.5)
     
-    # Generate PLAYABLE HTML game
+    # Generate both outputs
     print("\n" + "=" * 60)
-    print("🎮 GENERATING PLAYABLE ADVENTURE!")
+    print("🎮 GENERATING OUTPUTS")
     print("=" * 60)
     
-    output_file = save_html_game(engine.get_render_data(), "play_adventure.html")
+    # 1. PLAYABLE GAME - YOU can play it
+    play_file = save_html_game(engine.get_render_data(), "play_adventure.html")
     
-    full_path = os.path.abspath(output_file)
-    print(f"\n✅ PLAYABLE GAME SAVED: {full_path}")
-    print("\n🌐 Open the file in your browser to PLAY!")
-    print("   You control the performer, move around, collect items, talk to NPCs!")
+    # 2. SPECTATOR VIEW - WATCH the AI play!
+    spectate_file = save_viewer(engine, "spectate.html")
     
-    # Try to open browser
+    print(f"\n✅ PLAYABLE GAME (YOU play): {os.path.abspath(play_file)}")
+    print(f"✅ SPECTATOR VIEW (WATCH AI): {os.path.abspath(spectate_file)}")
+    print("\n🌐 Opening SPECTATOR VIEW...")
+    
+    # Open spectator view by default
     try:
         import webbrowser
-        webbrowser.open(f'file://{full_path}')
-        print("\n🌐 Opening in your browser...")
+        webbrowser.open(f'file://{os.path.abspath(spectate_file)}')
     except:
         pass
 
