@@ -3,6 +3,7 @@
 Circus Arena - Ringmaster Edition!
 """
 import time
+import os
 
 from circus import GameEngine
 from circus.html_generator import save_html_game
@@ -32,7 +33,7 @@ def main():
     )
     
     engine.start_game()
-    num_rounds = 3
+    num_rounds = 2  # Fewer rounds for faster generation
     
     print("\n" + "=" * 60)
     print(f"🎮 PLAYING {num_rounds} ROUNDS WITH FEEDBACK LOOP")
@@ -53,13 +54,25 @@ def main():
         
         time.sleep(0.5)
     
+    # Generate PLAYABLE HTML game
     print("\n" + "=" * 60)
-    print("📊 GAME SHOW COMPLETE!")
+    print("🎮 GENERATING PLAYABLE ADVENTURE!")
     print("=" * 60)
-    print(f"Improvements made: {len(engine.revisions)}")
     
-    output_file = save_html_game(engine.get_render_data(), "circus_arena.html")
-    print(f"\n✅ Saved: {output_file}")
+    output_file = save_html_game(engine.get_render_data(), "play_adventure.html")
+    
+    full_path = os.path.abspath(output_file)
+    print(f"\n✅ PLAYABLE GAME SAVED: {full_path}")
+    print("\n🌐 Open the file in your browser to PLAY!")
+    print("   You control the performer, move around, collect items, talk to NPCs!")
+    
+    # Try to open browser
+    try:
+        import webbrowser
+        webbrowser.open(f'file://{full_path}')
+        print("\n🌐 Opening in your browser...")
+    except:
+        pass
 
 
 if __name__ == "__main__":
